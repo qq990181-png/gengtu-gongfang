@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>梗图工坊</title>
+  <meta name="description" content="上传或选择图片，拖动顶部和底部文字，调整字号与描边，导出成图。" />
+  <meta name="theme-color" content="#0c0c0d" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+SC:wght@400;500;600;700;900&family=Oswald:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0c0d;
+      --surface: #161618;
+      --elevated: #1e1e21;
+      --fg: #f2f1ed;
+      --muted: #8e8d88;
+      --subtle: #6b6a66;
+      --primary: #e8e4d9;
+      --primary-fg: #0c0c0d;
+      --border: #2a2a2c;
+      --paper: #f4f1ea;
+      --ink: #111110;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100dvh;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "Noto Sans SC", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+    button:disabled { opacity: .4; cursor: default; }
+    h1, h2 { text-wrap: balance; margin: 0; }
+    .app { display: flex; flex-direction: column; min-height: 100dvh; }
+    @media (min-width: 1024px) {
+      .app { height: 100dvh; overflow: hidden; }
+    }
+    header {
+      position: sticky; top: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--bg);
+    }
+    h1 { font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 36px; padding: 0 12px; border-radius: 8px; border: 0;
+      font: 500 13px/1 "Noto Sans SC", sans-serif; color: var(--primary-fg); background: var(--primary);
+    }
+    .btn.ghost { background: transparent; color: var(--muted); }
+    .btn.ghost:hover { background: var(--elevated); color: var(--fg); }
+    .btn.outline { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+    .btn.outline.on, .btn.on { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+    .btn:active { transform: scale(.98); }
+    .layout { display: flex; flex: 1; flex-direction: column; }
+    @media (min-width: 1024px) { .layout { flex-direction: row; min-height: 0; } }
+    .stage-wrap {
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px 12px; background: var(--bg); position: relative;
+    }
+    @media (min-width: 1024px) { .stage-wrap { flex: 1; min-height: 0; padding: 24px 32px; } }
+    .stage { position: relative; max-width: 100%; max-height: 100%; box-shadow: 0 0 0 1px rgb(255 255 255 / .08); }
+    .stage img {
+      display: block; max-width: 100%; height: auto;
+      max-height: min(58dvh, 720px); user-select: none; -webkit-user-drag: none;
+    }
+    @media (min-width: 1024px) { .stage img { max-height: calc(100dvh - 8rem); } }
+    .cap {
+      position: absolute; max-width: 92%; transform: translate(-50%, -50%);
+      margin: 0; text-align: center; cursor: grab; user-select: none; touch-action: none;
+      line-height: 1.12; font-weight: 900; padding: 0 4px; width: max-content;
+    }
+    .cap.ghost { opacity: .4; }
+    .cap.drag { cursor: grabbing; }
+    .drop {
+      pointer-events: none; position: absolute; inset: 12px;
+      display: none; align-items: center; justify-content: center;
+      border: 1px dashed color-mix(in oklab, var(--primary) 40%, transparent);
+      border-radius: 16px; background: color-mix(in oklab, var(--bg) 70%, transparent);
+      font-size: 14px; font-weight: 500;
+    }
+    .drop.on { display: flex; }
+    aside {
+      width: 100%; border-top: 1px solid var(--border); background: var(--surface);
+    }
+    @media (min-width: 1024px) {
+      aside { width: 320px; border-top: 0; border-left: 1px solid var(--border); overflow-y: auto; }
+    }
+    .panel { padding: 20px 16px; display: flex; flex-direction: column; gap: 24px; }
+    h2 { font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: .04em; }
+    label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 8px; }
+    textarea {
+      width: 100%; min-height: 80px; resize: vertical; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--elevated); color: var(--fg);
+      padding: 10px 12px; font: 14px/1.4 "Noto Sans SC", sans-serif;
+    }
+    textarea:focus { outline: 2px solid var(--primary); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .grid4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
+    .preset {
+      height: 48px; border-radius: 8px; border: 1px solid var(--border);
+      background: transparent; color: var(--fg); text-align: left; padding: 0 12px;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .preset b { font-size: 14px; font-weight: 500; }
+    .preset span { font-size: 12px; color: var(--subtle); margin-top: 4px; }
+    .preset.on { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+    .preset.on span { color: color-mix(in oklab, var(--primary-fg) 70%, transparent); }
+    .thumbs button {
+      aspect-ratio: 1; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--elevated); overflow: hidden; padding: 0; color: var(--muted);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      font-size: 12px; font-weight: 500;
+    }
+    .thumbs button.on { box-shadow: 0 0 0 2px var(--primary); }
+    .thumbs img, .thumbs svg { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .hint { font-size: 12px; color: var(--subtle); line-height: 1.5; }
+    .slat { display: flex; justify-content: space-between; align-items: center; }
+    .slat span { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--subtle); }
+    input[type=range] { width: 100%; accent-color: var(--primary); }
+    .toast {
+      position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+      background: var(--elevated); color: var(--fg); padding: 8px 12px; border-radius: 8px;
+      font-size: 14px; box-shadow: 0 0 0 1px rgb(255 255 255 / .08); display: none; z-index: 30;
+    }
+    .file { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>梗图工坊</h1>
+      <div class="row">
+        <button class="btn ghost" id="reset" type="button">重置</button>
+        <button class="btn" id="download" type="button">下载</button>
+      </div>
+    </header>
+    <div class="layout">
+      <div class="stage-wrap" id="dropzone">
+        <div class="stage" id="stage">
+          <img id="base" alt="梗图底图" draggable="false" />
+          <p class="cap" id="cap-top" role="button" tabindex="0" aria-label="顶部文字，可拖动"></p>
+          <p class="cap" id="cap-bottom" role="button" tabindex="0" aria-label="底部文字，可拖动"></p>
+        </div>
+        <div class="drop" id="dropHint">松开以替换底图</div>
+      </div>
+      <aside>
+        <div class="panel">
+          <section>
+            <h2>文字</h2>
+            <div style="margin-top:12px">
+              <label for="topText">顶部</label>
+              <textarea id="topText" rows="2" placeholder="顶部文字"></textarea>
+            </div>
+            <div style="margin-top:12px">
+              <label for="bottomText">底部</label>
+              <textarea id="bottomText" rows="2" placeholder="底部文字"></textarea>
+            </div>
+          </section>
+          <section>
+            <h2>字体</h2>
+            <div class="grid3" style="margin-top:12px">
+              <button class="btn outline" data-font="gothic" type="button">黑体</button>
+              <button class="btn outline" data-font="impact" type="button">Impact</button>
+              <button class="btn outline" data-font="condensed" type="button">窄体</button>
+            </div>
+            <div class="slat" style="margin-top:12px"><label id="sizeLab">字号</label><span id="sizeVal"></span></div>
+            <input id="size" type="range" min="0.04" max="0.16" step="0.005" />
+            <div class="slat"><label id="outLab">描边</label><span id="outVal"></span></div>
+            <input id="outline" type="range" min="0" max="0.22" step="0.01" />
+            <div class="grid3" style="margin-top:8px">
+              <button class="btn outline" data-ink="light" type="button">白字</button>
+              <button class="btn outline" data-ink="dark" type="button">黑字</button>
+              <button class="btn outline" id="caps" type="button">大写</button>
+            </div>
+          </section>
+          <section>
+            <h2>预设</h2>
+            <div class="grid2" id="presets" style="margin-top:12px"></div>
+          </section>
+          <section>
+            <h2>底图</h2>
+            <div class="grid4 thumbs" id="thumbs" style="margin-top:12px"></div>
+            <p class="hint">也可拖入或粘贴图片到画布。文字可直接拖动。</p>
+            <input class="file" id="file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" tabindex="-1" aria-hidden="true" />
+          </section>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <p class="toast" id="toast" role="status"></p>
+  <script>
+    const FONTS = {
+      gothic: '"Noto Sans SC","Noto Sans",sans-serif',
+      impact: 'Anton,"Noto Sans SC",sans-serif',
+      condensed: 'Oswald,"Noto Sans SC",sans-serif',
+    };
+    const PRESETS = [
+      { id:"classic", label:"经典", hint:"上下配字", fontId:"gothic", fontSize:.09, outline:.12, uppercase:true, ink:"light", top:{x:.5,y:.1,on:true}, bottom:{x:.5,y:.9,on:true} },
+      { id:"top-only", label:"仅顶部", hint:"标题压图", fontId:"gothic", fontSize:.1, outline:.12, uppercase:true, ink:"light", top:{x:.5,y:.12,on:true}, bottom:{x:.5,y:.9,on:false} },
+      { id:"bottom-only", label:"仅底部", hint:"字幕条", fontId:"gothic", fontSize:.085, outline:.11, uppercase:true, ink:"light", top:{x:.5,y:.1,on:false}, bottom:{x:.5,y:.9,on:true} },
+      { id:"modern", label:"现代", hint:"轻描边", fontId:"condensed", fontSize:.07, outline:.06, uppercase:false, ink:"light", top:{x:.5,y:.08,on:true}, bottom:{x:.5,y:.92,on:true} },
+      { id:"heavy", label:"粗描边", hint:"加厚轮廓", fontId:"impact", fontSize:.11, outline:.2, uppercase:true, ink:"light", top:{x:.5,y:.11,on:true}, bottom:{x:.5,y:.89,on:true} },
+      { id:"poster", label:"海报", hint:"细字居中", fontId:"condensed", fontSize:.055, outline:.04, uppercase:false, ink:"light", top:{x:.5,y:.14,on:true}, bottom:{x:.5,y:.86,on:true} },
+      { id:"invert", label:"反色", hint:"黑字白边", fontId:"gothic", fontSize:.09, outline:.12, uppercase:true, ink:"dark", top:{x:.5,y:.1,on:true}, bottom:{x:.5,y:.9,on:true} },
+    ];
+    const svg = (body, w=1200, h=900) =>
+      "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`);
+    const TEMPLATES = [
+      { id:"dog", label:"柴犬色块", ink:"light", src: svg(`<rect width="1200" height="900" fill="#c47a3a"/><circle cx="600" cy="520" r="220" fill="#e8b07a"/><circle cx="520" cy="480" r="28" fill="#1a120c"/><circle cx="680" cy="480" r="28" fill="#1a120c"/><ellipse cx="600" cy="560" rx="36" ry="24" fill="#7a3b24"/><ellipse cx="430" cy="360" rx="90" ry="120" fill="#6b3a22"/><ellipse cx="770" cy="360" rx="90" ry="120" fill="#6b3a22"/>`) },
+      { id:"cat", label:"橘猫色块", ink:"light", src: svg(`<rect width="1200" height="900" fill="#6b6a4a"/><ellipse cx="600" cy="540" rx="250" ry="220" fill="#d9822b"/><polygon points="390,360 470,200 540,380" fill="#d9822b"/><polygon points="810,360 730,200 660,380" fill="#d9822b"/><circle cx="520" cy="500" r="22" fill="#1a120c"/><circle cx="680" cy="500" r="22" fill="#1a120c"/><path d="M560 580 Q600 620 640 580" fill="none" stroke="#1a120c" stroke-width="10"/>`) },
+      { id:"frog", label:"青蛙色块", ink:"light", src: svg(`<rect width="1200" height="900" fill="#3d6b4f"/><ellipse cx="600" cy="560" rx="280" ry="200" fill="#6fbf63"/><circle cx="480" cy="430" r="90" fill="#8ed67f"/><circle cx="720" cy="430" r="90" fill="#8ed67f"/><circle cx="480" cy="430" r="38" fill="#111"/><circle cx="720" cy="430" r="38" fill="#111"/><ellipse cx="600" cy="610" rx="70" ry="28" fill="#2d4a32"/>`) },
+      { id:"black", label:"纯黑", ink:"light", src: svg(`<rect width="1200" height="900" fill="#111110"/>`) },
+      { id:"paper", label:"纸白", ink:"dark", src: svg(`<rect width="1200" height="900" fill="#f4f1ea"/>`) },
+      { id:"split", label:"双格", ink:"light", src: svg(`<rect width="1200" height="900" fill="#0c0c0d"/><rect y="0" width="1200" height="444" fill="#1c1c1f"/><rect y="456" width="1200" height="444" fill="#2a2a2e"/>`) },
+      { id:"quad", label:"四格", ink:"light", src: svg(`<rect width="1200" height="900" fill="#0c0c0d"/><rect width="594" height="444" fill="#18181b"/><rect x="606" width="594" height="444" fill="#242428"/><rect y="456" width="594" height="444" fill="#2e2e33"/><rect x="606" y="456" width="594" height="444" fill="#3a3a40"/>`) },
+    ];
+
+    const state = {
+      src: TEMPLATES[0].src,
+      imageId: TEMPLATES[0].id,
+      objectUrl: null,
+      top: { text:"当一切都准备好了", x:.5, y:.1, on:true },
+      bottom: { text:"却忘了保存", x:.5, y:.9, on:true },
+      fontId: "gothic", fontSize: .09, outline: .12, uppercase: true, ink: "light",
+      presetId: "classic",
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const base = $("base");
+    const stage = $("stage");
+    const capTop = $("cap-top");
+    const capBottom = $("cap-bottom");
+
+    function fill() { return state.ink === "light" ? "#f4f1ea" : "#111110"; }
+    function stroke() { return state.ink === "light" ? "#111110" : "#f4f1ea"; }
+
+    function paintCaption(el, cap) {
+      if (!cap.on) { el.style.display = "none"; return; }
+      el.style.display = "block";
+      const w = base.clientWidth || 480;
+      const fontPx = Math.max(14, state.fontSize * w);
+      const strokePx = Math.max(0, state.outline * fontPx);
+      const raw = cap.text.trim();
+      el.classList.toggle("ghost", !raw);
+      el.textContent = raw || (el === capTop ? "顶部文字" : "底部文字");
+      el.style.left = cap.x * 100 + "%";
+      el.style.top = cap.y * 100 + "%";
+      el.style.fontFamily = FONTS[state.fontId];
+      el.style.fontWeight = state.fontId === "gothic" ? "900" : "700";
+      el.style.fontSize = fontPx + "px";
+      el.style.color = fill();
+      el.style.webkitTextStroke = strokePx > 0 ? `${strokePx}px ${stroke()}` : "0";
+      el.style.paintOrder = "stroke fill";
+      el.style.textTransform = state.uppercase ? "uppercase" : "none";
+    }
+
+    function render() {
+      base.src = state.src;
+      $("topText").value = state.top.text;
+      $("bottomText").value = state.bottom.text;
+      $("size").value = state.fontSize;
+      $("outline").value = state.outline;
+      $("sizeVal").textContent = Math.round(state.fontSize * 800);
+      $("outVal").textContent = Math.round(state.outline * 100);
+      $("caps").classList.toggle("on", state.uppercase);
+      document.querySelectorAll("[data-font]").forEach((b) => b.classList.toggle("on", b.dataset.font === state.fontId));
+      document.querySelectorAll("[data-ink]").forEach((b) => b.classList.toggle("on", b.dataset.ink === state.ink));
+      document.querySelectorAll(".preset").forEach((b) => b.classList.toggle("on", b.dataset.id === state.presetId));
+      document.querySelectorAll("#thumbs button[data-id]").forEach((b) => b.classList.toggle("on", b.dataset.id === state.imageId));
+      paintCaption(capTop, state.top);
+      paintCaption(capBottom, state.bottom);
+    }
+
+    function applyPreset(id, keepText = true) {
+      const p = PRESETS.find((x) => x.id === id);
+      if (!p) return;
+      state.presetId = p.id;
+      state.fontId = p.fontId;
+      state.fontSize = p.fontSize;
+      state.outline = p.outline;
+      state.uppercase = p.uppercase;
+      state.ink = p.ink;
+      const topText = keepText ? state.top.text : "当一切都准备好了";
+      const bottomText = keepText ? state.bottom.text : "却忘了保存";
+      state.top = { text: topText, x: p.top.x, y: p.top.y, on: p.top.on };
+      state.bottom = { text: bottomText, x: p.bottom.x, y: p.bottom.y, on: p.bottom.on };
+      render();
+    }
+
+    PRESETS.forEach((p) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "preset";
+      b.dataset.id = p.id;
+      b.innerHTML = `<b>${p.label}</b><span>${p.hint}</span>`;
+      b.onclick = () => applyPreset(p.id, true);
+      $("presets").appendChild(b);
+    });
+
+    const uploadBtn = document.createElement("button");
+    uploadBtn.type = "button";
+    uploadBtn.setAttribute("aria-label", "上传图片");
+    uploadBtn.innerHTML = "<span>上传</span>";
+    uploadBtn.onclick = () => $("file").click();
+    $("thumbs").appendChild(uploadBtn);
+    TEMPLATES.forEach((t) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.id = t.id;
+      b.title = t.label;
+      b.setAttribute("aria-label", t.label);
+      const img = document.createElement("img");
+      img.src = t.src; img.alt = ""; img.draggable = false;
+      b.appendChild(img);
+      b.onclick = () => {
+        if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+        state.objectUrl = null;
+        state.src = t.src; state.imageId = t.id; state.ink = t.ink;
+        render();
+      };
+      $("thumbs").appendChild(b);
+    });
+
+    function setFile(file) {
+      if (!file || !file.type.startsWith("image/")) return;
+      if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+      state.objectUrl = URL.createObjectURL(file);
+      state.src = state.objectUrl;
+      state.imageId = "upload";
+      render();
+    }
+
+    $("file").onchange = (e) => { setFile(e.target.files[0]); e.target.value = ""; };
+    $("topText").oninput = (e) => { state.top.text = e.target.value; state.top.on = true; render(); };
+    $("bottomText").oninput = (e) => { state.bottom.text = e.target.value; state.bottom.on = true; render(); };
+    $("size").oninput = (e) => { state.fontSize = Number(e.target.value); render(); };
+    $("outline").oninput = (e) => { state.outline = Number(e.target.value); render(); };
+    $("caps").onclick = () => { state.uppercase = !state.uppercase; render(); };
+    document.querySelectorAll("[data-font]").forEach((b) => b.onclick = () => { state.fontId = b.dataset.font; render(); });
+    document.querySelectorAll("[data-ink]").forEach((b) => b.onclick = () => { state.ink = b.dataset.ink; render(); });
+    $("reset").onclick = () => applyPreset("classic", false);
+    base.onload = render;
+
+    let drag = null;
+    function pos(e) {
+      const r = stage.getBoundingClientRect();
+      const x = Math.min(.94, Math.max(.06, (e.clientX - r.left) / r.width));
+      const y = Math.min(.94, Math.max(.06, (e.clientY - r.top) / r.height));
+      return { x, y };
+    }
+    function bindCap(el, key) {
+      el.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        drag = key;
+        el.classList.add("drag");
+      });
+    }
+    stage.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      e.preventDefault();
+      const p = pos(e);
+      state[drag].x = p.x; state[drag].y = p.y;
+      paintCaption(drag === "top" ? capTop : capBottom, state[drag]);
+    });
+    const end = () => { drag = null; capTop.classList.remove("drag"); capBottom.classList.remove("drag"); };
+    stage.addEventListener("pointerup", end);
+    stage.addEventListener("pointercancel", end);
+    bindCap(capTop, "top");
+    bindCap(capBottom, "bottom");
+
+    const zone = $("dropzone");
+    zone.addEventListener("dragover", (e) => { e.preventDefault(); $("dropHint").classList.add("on"); });
+    zone.addEventListener("dragleave", () => $("dropHint").classList.remove("on"));
+    zone.addEventListener("drop", (e) => { e.preventDefault(); $("dropHint").classList.remove("on"); setFile(e.dataTransfer.files[0]); });
+    window.addEventListener("paste", (e) => {
+      const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"));
+      if (item) { e.preventDefault(); setFile(item.getAsFile()); }
+    });
+
+    function wrapText(ctx, text, maxWidth) {
+      const out = [];
+      for (const para of text.split("\n")) {
+        if (!para) { out.push(""); continue; }
+        if (/\s/.test(para)) {
+          let line = "";
+          for (const word of para.split(/\s+/)) {
+            const next = line ? line + " " + word : word;
+            if (ctx.measureText(next).width <= maxWidth) line = next;
+            else { if (line) out.push(line); line = word; }
+          }
+          if (line) out.push(line);
+        } else {
+          let line = "";
+          for (const ch of para) {
+            const next = line + ch;
+            if (line && ctx.measureText(next).width > maxWidth) { out.push(line); line = ch; }
+            else line = next;
+          }
+          if (line) out.push(line);
+        }
+      }
+      return out.length ? out : [""];
+    }
+
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        if (!src.startsWith("blob:") && !src.startsWith("data:")) img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("图片加载失败"));
+        img.src = src;
+      });
+    }
+
+    $("download").onclick = async () => {
+      const btn = $("download");
+      btn.disabled = true;
+      try {
+        if (document.fonts?.ready) await document.fonts.ready;
+        const image = await loadImage(state.src);
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth || image.width;
+        canvas.height = image.naturalHeight || image.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const fontPx = Math.max(12, state.fontSize * canvas.width);
+        const strokePx = Math.max(0, state.outline * fontPx);
+        const weight = state.fontId === "gothic" ? "900 " : "700 ";
+        ctx.font = `${weight}${fontPx}px ${FONTS[state.fontId]}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.miterLimit = 2;
+        ctx.lineWidth = strokePx;
+        const maxWidth = canvas.width * 0.92;
+        const lineHeight = fontPx * 1.12;
+        for (const cap of [state.top, state.bottom]) {
+          if (!cap.on || !cap.text.trim()) continue;
+          const text = state.uppercase ? cap.text.trim().toUpperCase() : cap.text.trim();
+          const lines = wrapText(ctx, text, maxWidth);
+          const totalH = lines.length * lineHeight;
+          const x = cap.x * canvas.width;
+          let y = cap.y * canvas.height - totalH / 2 + lineHeight / 2;
+          for (const line of lines) {
+            if (strokePx > 0) { ctx.strokeStyle = stroke(); ctx.strokeText(line, x, y, maxWidth); }
+            ctx.fillStyle = fill();
+            ctx.fillText(line, x, y, maxWidth);
+            y += lineHeight;
+          }
+        }
+        const blob = await new Promise((res, rej) => canvas.toBlob((b) => b ? res(b) : rej(), "image/png"));
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        const d = new Date();
+        a.download = `meme-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}.png`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        toast("已导出");
+      } catch {
+        toast("导出失败，请换一张图片再试");
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    function toast(msg) {
+      const t = $("toast");
+      t.textContent = msg;
+      t.style.display = "block";
+      setTimeout(() => { t.style.display = "none"; }, 2200);
+    }
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+
+    render();
+  </script>
+</body>
+</html>
